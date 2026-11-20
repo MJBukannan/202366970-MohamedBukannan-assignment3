@@ -18,6 +18,7 @@
                        remembered; log out clears both
    9. Show / hide    - every section can be collapsed, remembered between
                        visits
+  10. Weather        - current weather at KFUPM from the Open-Meteo API
 
    All animation is skipped for visitors who have asked their system for
    reduced motion (see prefersReducedMotion and the CSS media query).
@@ -974,12 +975,89 @@ function initSectionToggles() {
   });
 }
 
+/* --------------------------------------------------------------------------
+   10. Weather
+   Current weather at KFUPM in Dhahran from Open-Meteo, a free API that needs
+   no key or account. Weather changes slowly, so the answer is cached for
+   15 minutes with the same fetchJSON helper the GitHub section uses.
+   -------------------------------------------------------------------------- */
+const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast'
+  + '?latitude=26.31&longitude=50.14'
+  + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code'
+  + '&timezone=Asia%2FRiyadh';
+
+// Open-Meteo describes the sky with a WMO weather code. The codes come in
+// ranges, so each entry is the highest code that gets that description.
+const WEATHER_CODES = [
+  [0, 'Clear sky'],
+  [3, 'Partly cloudy'],
+  [48, 'Foggy'],
+  [57, 'Drizzle'],
+  [67, 'Rain'],
+  [77, 'Snow'],
+  [82, 'Rain showers'],
+  [86, 'Snow showers'],
+  [99, 'Thunderstorm']
+];
+
+function describeWeather(code) {
+  const match = WEATHER_CODES.find(function (entry) {
+    return code <= entry[0];
+  });
+  return match ? match[1] : 'Unknown conditions';
+}
+
+function initWeather() {
+  const status = document.getElementById('weather-status');
+  const card = document.getElementById('weather-card');
+
+  if (!status || !card) return;
+
+  // Puts text into the element marked data-weather="<field>".
+  function fill(field, text) {
+    const element = card.querySelector('[data-weather="' + field + '"]');
+    if (element) element.textContent = text;
+  }
+
+  async function loadWeather() {
+    card.hidden = true;
+    status.className = 'repo-status';
+    status.textContent = 'Loading weather…';
+
+    try {
+      const data = await fetchJSON(WEATHER_URL, { cacheKey: 'weather', maxAgeMs: 15 * 60 * 1000 });
+      const now = data.current;
+
+      // Check the data has what is needed, in case the API changes.
+      if (!now || typeof now.temperature_2m !== 'number') {
+        throw new Error('bad-data');
+      }
+
+      fill('temp', Math.round(now.temperature_2m) + '°C');
+      fill('summary', describeWeather(now.weather_code));
+      fill('feels', 'Feels like ' + Math.round(now.apparent_temperature) + '°C');
+      fill('humidity', 'Humidity ' + now.relative_humidity_2m + '%');
+      fill('wind', 'Wind ' + Math.round(now.wind_speed_10m) + ' km/h');
+      // now.time looks like "2026-11-20T17:00"; keep the "17:00" part.
+      fill('time', 'Updated ' + now.time.slice(11, 16) + ' (Dhahran time)');
+
+      status.replaceChildren();
+      card.hidden = false;
+    } catch (error) {
+      showStatusError(status, friendlyError(error, 'The weather service', 'the weather'), loadWeather);
+    }
+  }
+
+  loadWeather();
+}
+
 /* The script tag uses defer, so the HTML is already parsed by this point. */
 initThemeToggle();
 initContactForm();
 initScrollSpy();
 initProjects();
 initGitHubRepos();
+initWeather();
 initScrollReveal();
 initVisitTimer();
 initLogin();

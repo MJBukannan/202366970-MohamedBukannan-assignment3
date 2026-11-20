@@ -732,6 +732,40 @@ h3 {
   color: var(--color-accent-dark);
 }
 
+/* ---------- Weather ---------- */
+.weather-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  max-width: 480px;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow);
+  animation: fade-up 0.4s ease both;
+}
+
+.weather-card p {
+  margin: 0.15rem 0;
+}
+
+.weather-temp {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.weather-summary {
+  font-weight: 600;
+}
+
+.api-credit {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
 /* ---------- Show / hide sections ---------- */
 /* Heading and its Hide/Show button on one line */
 .section-head {
