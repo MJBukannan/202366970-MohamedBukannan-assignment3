@@ -41,11 +41,55 @@
         <li><a href="#contact">Contact</a></li>
       </ul>
     </nav>
-    <!-- aria-pressed tells assistive technology whether dark mode is on -->
-    <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false">
-      Dark mode
-    </button>
+    <div class="header-actions">
+      <!-- Simulated login: js/script.js switches the text between Log in and Log out -->
+      <button type="button" id="login-button" class="theme-toggle">Log in</button>
+      <!-- aria-pressed tells assistive technology whether dark mode is on -->
+      <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false">
+        Dark mode
+      </button>
+    </div>
   </header>
+
+  <!--
+    Simulated login window. <dialog> is the browser's built-in pop-up: it
+    keeps keyboard focus inside while open and closes with the Escape key.
+    It has two steps; js/script.js shows one at a time.
+  -->
+  <dialog id="login-dialog" class="login-dialog" aria-labelledby="login-title">
+    <!-- Step 1: username and password (nothing is sent anywhere) -->
+    <form id="login-form" class="dialog-form" novalidate>
+      <h2 id="login-title">Log in</h2>
+      <p class="dialog-note">This is a simulated login: any username and password work.</p>
+      <div class="field">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" autocomplete="username" aria-describedby="login-username-error">
+        <span class="field-error" id="login-username-error"></span>
+      </div>
+      <div class="field">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" autocomplete="current-password" aria-describedby="login-password-error">
+        <span class="field-error" id="login-password-error"></span>
+      </div>
+      <div class="dialog-buttons">
+        <button type="submit">Log in</button>
+        <button type="button" class="secondary-btn" id="login-cancel">Cancel</button>
+      </div>
+    </form>
+
+    <!-- Step 2: shown right after logging in -->
+    <form id="name-form" class="dialog-form" novalidate hidden>
+      <h2>What should I call you?</h2>
+      <div class="field">
+        <label for="visitor-name">Your name</label>
+        <input type="text" id="visitor-name" maxlength="40" autocomplete="given-name" aria-describedby="visitor-name-error">
+        <span class="field-error" id="visitor-name-error"></span>
+      </div>
+      <div class="dialog-buttons">
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
 
   <main>
 
@@ -58,6 +102,8 @@
         who loves trying new things. I enjoy taking on challenges that push me past my limits,
         and I'm always exploring new hobbies and interests along the way.
       </p>
+      <!-- Shown by js/script.js after the visitor logs in and gives a name -->
+      <p class="greeting" id="greeting" hidden></p>
     </section>
 
     <!-- Projects: one card per project -->

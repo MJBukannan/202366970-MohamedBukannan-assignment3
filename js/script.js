@@ -12,6 +12,8 @@
                        with loading, error and retry states
    6. Scroll reveal  - sections fade in as they scroll into view
    7. Visit timer    - how long the visitor has had the page open
+   8. Simulated login- log in, then give a name that is greeted and
+                       remembered; log out clears both
 
    All animation is skipped for visitors who have asked their system for
    reduced motion (see prefersReducedMotion and the CSS media query).
@@ -722,6 +724,145 @@ function initVisitTimer() {
   if (!document.hidden) start();
 }
 
+/* --------------------------------------------------------------------------
+   8. Simulated login
+   The page has two states, logged out and logged in, saved with the storage
+   helper so they survive a reload. Logging in takes two steps in a dialog:
+     1. username + password (any non-empty values work; nothing is sent)
+     2. "What should I call you?" -> the name is greeted in the About section
+        and filled into the contact form
+   Logging out clears both the login and the name.
+   -------------------------------------------------------------------------- */
+const MAX_NAME_LENGTH = 40;
+
+function initLogin() {
+  const button = document.getElementById('login-button');
+  const dialog = document.getElementById('login-dialog');
+  const loginForm = document.getElementById('login-form');
+  const nameForm = document.getElementById('name-form');
+  const username = document.getElementById('login-username');
+  const password = document.getElementById('login-password');
+  const nameInput = document.getElementById('visitor-name');
+  const greeting = document.getElementById('greeting');
+  const contactName = document.getElementById('name');
+
+  if (!button || !dialog || !loginForm || !nameForm || !greeting) return;
+
+  // Shows or clears the message under one field. Returns true when valid.
+  function check(field, message) {
+    const box = document.getElementById(field.id + '-error');
+    box.textContent = message;
+    if (message) {
+      field.setAttribute('aria-invalid', 'true');
+    } else {
+      field.removeAttribute('aria-invalid');
+    }
+    return message === '';
+  }
+
+  function isLoggedIn() {
+    return storage.get('loggedIn') === 'true';
+  }
+
+  // Makes the page match the saved state: button text, greeting, contact name.
+  function render() {
+    const name = storage.get('visitorName');
+
+    if (isLoggedIn() && name) {
+      button.textContent = 'Log out';
+      greeting.textContent = 'Welcome back, ' + name + '!';
+      greeting.hidden = false;
+      // Only fill the contact form if the visitor has not typed in it.
+      if (contactName && contactName.value === '') contactName.value = name;
+    } else {
+      button.textContent = 'Log in';
+      greeting.hidden = true;
+      greeting.textContent = '';
+    }
+  }
+
+  // Opens the dialog on step 1 with empty fields.
+  function openLogin() {
+    loginForm.reset();
+    check(username, '');
+    check(password, '');
+    loginForm.hidden = false;
+    nameForm.hidden = true;
+    dialog.showModal();
+    username.focus();
+  }
+
+  function logOut() {
+    if (contactName && contactName.value === storage.get('visitorName')) {
+      contactName.value = '';
+    }
+    storage.remove('loggedIn');
+    storage.remove('visitorName');
+    render();
+  }
+
+  button.addEventListener('click', function () {
+    if (isLoggedIn()) {
+      logOut();
+    } else {
+      openLogin();
+    }
+  });
+
+  // Step 1: both fields must be filled in. Nothing is checked against a
+  // real account, because there is no server.
+  loginForm.addEventListener('submit', function (event) {
+    event.preventDefault();
+
+    const userOk = check(username, username.value.trim() === '' ? 'Username is required.' : '');
+    const passOk = check(password, password.value === '' ? 'Password is required.' : '');
+
+    if (!userOk) { username.focus(); return; }
+    if (!passOk) { password.focus(); return; }
+
+    // Logged in. The username is saved as the name for now, so the visitor
+    // is still greeted if they close the dialog before step 2.
+    storage.set('loggedIn', 'true');
+    storage.set('visitorName', username.value.trim().slice(0, MAX_NAME_LENGTH));
+
+    // Step 2: ask for the name, starting from the username.
+    loginForm.hidden = true;
+    nameForm.hidden = false;
+    nameInput.value = username.value.trim().slice(0, MAX_NAME_LENGTH);
+    check(nameInput, '');
+    nameInput.focus();
+    nameInput.select();
+  });
+
+  nameForm.addEventListener('submit', function (event) {
+    event.preventDefault();
+
+    // Collapse repeated spaces and cap the length.
+    const name = nameInput.value.trim().replace(/\s+/g, ' ').slice(0, MAX_NAME_LENGTH);
+
+    if (!check(nameInput, name === '' ? 'Please enter a name.' : '')) {
+      nameInput.focus();
+      return;
+    }
+
+    storage.set('visitorName', name);
+    dialog.close();
+  });
+
+  document.getElementById('login-cancel').addEventListener('click', function () {
+    dialog.close();
+  });
+
+  // 'close' fires however the dialog closes (Save, Cancel or Escape), so the
+  // page is always brought up to date here.
+  dialog.addEventListener('close', function () {
+    render();
+    button.focus();
+  });
+
+  render();
+}
+
 /* The script tag uses defer, so the HTML is already parsed by this point. */
 initThemeToggle();
 initContactForm();
@@ -730,3 +871,4 @@ initProjects();
 initGitHubRepos();
 initScrollReveal();
 initVisitTimer();
+initLogin();
