@@ -11,6 +11,7 @@
    5. GitHub repos   - latest public repos fetched from the GitHub API,
                        with loading, error and retry states
    6. Scroll reveal  - sections fade in as they scroll into view
+   7. Visit timer    - how long the visitor has had the page open
 
    All animation is skipped for visitors who have asked their system for
    reduced motion (see prefersReducedMotion and the CSS media query).
@@ -663,6 +664,64 @@ function initScrollReveal() {
   });
 }
 
+/* --------------------------------------------------------------------------
+   7. Visit timer
+   Shows how long the visitor has been on the page. It only counts while the
+   tab is visible: switching tabs pauses it, and coming back resumes it from
+   the same time. Time is measured with performance.now() instead of counting
+   ticks, because browsers slow down timers in background tabs.
+   -------------------------------------------------------------------------- */
+function initVisitTimer() {
+  const output = document.getElementById('visit-timer');
+
+  if (!output) return;
+
+  let countedMs = 0;     // time from earlier visible stretches
+  let startedAt = 0;     // when the current visible stretch began
+  let intervalId = null; // the running setInterval, or null while paused
+
+  // 42 -> "42s", 133 -> "2m 13s", 3754 -> "1h 2m 34s"
+  function format(totalSeconds) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) return hours + 'h ' + minutes + 'm ' + seconds + 's';
+    if (minutes > 0) return minutes + 'm ' + seconds + 's';
+    return seconds + 's';
+  }
+
+  function show() {
+    const totalMs = countedMs + (performance.now() - startedAt);
+    output.textContent = 'You have been here for ' + format(Math.floor(totalMs / 1000));
+  }
+
+  function start() {
+    startedAt = performance.now();
+    show();
+    intervalId = setInterval(show, 1000);
+  }
+
+  function pause() {
+    // Bank the time from this stretch before stopping.
+    countedMs += performance.now() - startedAt;
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+
+  // Fires when the tab is hidden (switched away, minimised) or shown again.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && intervalId !== null) {
+      pause();
+    } else if (!document.hidden && intervalId === null) {
+      start();
+    }
+  });
+
+  // A page can load in a background tab; only start counting once it is seen.
+  if (!document.hidden) start();
+}
+
 /* The script tag uses defer, so the HTML is already parsed by this point. */
 initThemeToggle();
 initContactForm();
@@ -670,3 +729,4 @@ initScrollSpy();
 initProjects();
 initGitHubRepos();
 initScrollReveal();
+initVisitTimer();
