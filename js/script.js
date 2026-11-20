@@ -2,6 +2,8 @@
    Interactivity for the portfolio site
 
    0. Storage helper - safe localStorage access used by every feature
+  0b. Fetch helper   - fetchJSON with a timeout and a session cache, shared
+                       by both API sections
    1. Theme toggle   - light / dark, remembered between visits
    2. Contact form   - validation and feedback (front-end only, no backend)
    3. Scroll spy     - highlights the nav link for the section in view
@@ -9,7 +11,7 @@
                        level selector, search and sort; every choice is
                        remembered between visits
    5. GitHub repos   - latest public repos fetched from the GitHub API,
-                       with loading, error and retry states
+                       cached for 10 minutes, with loading, error and retry
    6. Scroll reveal  - sections fade in as they scroll into view
    7. Visit timer    - how long the visitor has had the page open
    8. Simulated login- log in, then give a name that is greeted and
@@ -61,6 +63,97 @@ const storage = {
     }
   }
 };
+
+/* --------------------------------------------------------------------------
+   0b. Fetch helper
+   Both API sections (GitHub and weather) load data the same way, so the
+   shared parts live here once:
+     - timeoutMs:  give up after a few seconds instead of "Loading..." forever
+     - cacheKey / maxAgeMs: reuse a recent answer from sessionStorage, so a
+       reload does not spend another API request
+     - errors become short codes ('timeout', 'rate-limit', 'http-404',
+       'network') that friendlyError() turns into a sentence for the visitor
+   -------------------------------------------------------------------------- */
+async function fetchJSON(url, options) {
+  const settings = Object.assign({ timeoutMs: 8000, cacheKey: null, maxAgeMs: 0 }, options);
+
+  // 1. A recent enough copy in sessionStorage is returned straight away.
+  if (settings.cacheKey) {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(settings.cacheKey));
+      if (cached && Date.now() - cached.savedAt < settings.maxAgeMs) {
+        return cached.data;
+      }
+    } catch (error) {
+      /* No usable copy: fall through to the network. */
+    }
+  }
+
+  // 2. AbortController lets the code cancel a request that takes too long.
+  const controller = new AbortController();
+  const timer = setTimeout(function () {
+    controller.abort();
+  }, settings.timeoutMs);
+
+  let response;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    throw new Error(error.name === 'AbortError' ? 'timeout' : 'network');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  // 3. fetch only rejects when no answer arrives at all. An answer such as
+  //    404 or 403 still has to be checked here.
+  if (!response.ok) {
+    const limited = response.status === 403 || response.status === 429;
+    throw new Error(limited ? 'rate-limit' : 'http-' + response.status);
+  }
+
+  const data = await response.json();
+
+  // 4. Save a copy with the time it was saved, for step 1 next time.
+  if (settings.cacheKey) {
+    try {
+      sessionStorage.setItem(settings.cacheKey, JSON.stringify({ savedAt: Date.now(), data: data }));
+    } catch (error) {
+      /* The cache is a bonus; the data is still shown. */
+    }
+  }
+
+  return data;
+}
+
+// Turns an error code from fetchJSON into a sentence for the visitor.
+// service: who was asked ('GitHub'); what: what was asked for ('repositories').
+function friendlyError(error, service, what) {
+  switch (error.message) {
+    case 'rate-limit':
+      return service + ' is limiting requests right now. Wait a minute, then try again.';
+    case 'timeout':
+      return service + ' took too long to answer. Try again in a moment.';
+    default:
+      return 'Could not load ' + what + '. Check your internet connection and try again.';
+  }
+}
+
+// Shows an error message with a Retry button inside a status element, the
+// same way in every API section.
+function showStatusError(status, message, retry) {
+  status.className = 'repo-status error';
+
+  const text = document.createElement('p');
+  text.textContent = message;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'retry-btn';
+  button.textContent = 'Retry';
+  button.addEventListener('click', retry);
+
+  status.replaceChildren(text, button);
+}
 
 /* --------------------------------------------------------------------------
    1. Theme toggle
@@ -540,28 +633,6 @@ function initGitHubRepos() {
   // sort=updated puts the most recently changed repos first.
   const url = 'https://api.github.com/users/' + GITHUB_USER + '/repos?sort=updated&per_page=100';
 
-  function showLoading() {
-    list.replaceChildren();
-    status.className = 'repo-status';
-    status.textContent = 'Loading repositories…';
-  }
-
-  function showError(message) {
-    list.replaceChildren();
-    status.className = 'repo-status error';
-
-    const text = document.createElement('p');
-    text.textContent = message;
-
-    const retry = document.createElement('button');
-    retry.type = 'button';
-    retry.className = 'retry-btn';
-    retry.textContent = 'Retry';
-    retry.addEventListener('click', loadRepos);
-
-    status.replaceChildren(text, retry);
-  }
-
   // 2026-10-14T05:51:00Z -> 14 Oct 2026
   function formatDate(isoString) {
     return new Date(isoString).toLocaleDateString('en-GB', {
@@ -601,19 +672,13 @@ function initGitHubRepos() {
   // async lets the function wait for the network with await, without
   // freezing the page while it waits.
   async function loadRepos() {
-    showLoading();
+    list.replaceChildren();
+    status.className = 'repo-status';
+    status.textContent = 'Loading repositories…';
 
     try {
-      const response = await fetch(url);
-
-      // fetch only rejects when the request never gets an answer (offline,
-      // DNS failure). An answer such as 404 or 403 still has to be checked.
-      if (!response.ok) {
-        const limited = response.status === 403 || response.status === 429;
-        throw new Error(limited ? 'rate-limit' : 'http-' + response.status);
-      }
-
-      const repos = await response.json();
+      // Cached for 10 minutes: GitHub allows 60 requests an hour without a key.
+      const repos = await fetchJSON(url, { cacheKey: 'githubRepos', maxAgeMs: 10 * 60 * 1000 });
 
       // Forks are other people's projects, so they are left out.
       const latest = repos.filter(function (repo) {
@@ -621,7 +686,6 @@ function initGitHubRepos() {
       }).slice(0, REPO_LIMIT);
 
       if (latest.length === 0) {
-        status.className = 'repo-status';
         status.textContent = 'No public repositories yet.';
         return;
       }
@@ -629,11 +693,7 @@ function initGitHubRepos() {
       status.replaceChildren();
       list.replaceChildren(...latest.map(createRepoCard));
     } catch (error) {
-      if (error.message === 'rate-limit') {
-        showError('GitHub is limiting requests right now. Wait a minute, then try again.');
-      } else {
-        showError('Could not load repositories. Check your internet connection and try again.');
-      }
+      showStatusError(status, friendlyError(error, 'GitHub', 'repositories'), loadRepos);
     }
   }
 
