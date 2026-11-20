@@ -287,7 +287,8 @@ h3 {
   border-color: var(--color-accent);
 }
 
-.project-search {
+.project-search,
+.project-sort {
   flex: 1 1 220px;
   max-width: 320px;
   padding: 0.5rem 0.9rem;
@@ -298,9 +299,21 @@ h3 {
   background-color: var(--color-surface);
 }
 
-.project-search:focus {
+.project-sort {
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.project-search:focus,
+.project-sort:focus {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
+}
+
+.project-card .project-date {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-accent);
 }
 
 .project-count {

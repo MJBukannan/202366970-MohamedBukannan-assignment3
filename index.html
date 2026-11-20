@@ -73,6 +73,12 @@
         </div>
         <label for="project-search" class="visually-hidden">Search projects</label>
         <input type="search" id="project-search" class="project-search" placeholder="Search by title or tag">
+        <label for="project-sort" class="visually-hidden">Sort projects</label>
+        <select id="project-sort" class="project-sort">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="title">Title A–Z</option>
+        </select>
       </div>
 
       <!-- aria-live makes screen readers announce the new count after filtering -->

@@ -5,8 +5,8 @@
    1. Theme toggle   - light / dark, remembered between visits
    2. Contact form   - validation and feedback (front-end only, no backend)
    3. Scroll spy     - highlights the nav link for the section in view
-   4. Projects       - cards built from an array, with filter and search;
-                       the chosen filter is remembered between visits
+   4. Projects       - cards built from an array, with filter, search and
+                       sort; filter and sort are remembered between visits
    5. GitHub repos   - latest public repos fetched from the GitHub API,
                        with loading, error and retry states
    6. Scroll reveal  - sections fade in as they scroll into view
@@ -55,7 +55,6 @@ const storage = {
     }
   }
 };
-
 
 /* --------------------------------------------------------------------------
    1. Theme toggle
@@ -253,13 +252,16 @@ function initScrollSpy() {
 /* --------------------------------------------------------------------------
    4. Projects
    The projects live in one array instead of being written out in the HTML.
-   The cards are built from it, so filtering and searching only have to
-   decide which items to show, then rebuild the grid.
+   Every time something changes, the grid is rebuilt in three steps:
+     1. keep projects in the chosen category   (All / Software / Hardware)
+     2. keep projects that match the search text
+     3. sort what is left                      (Newest / Oldest / Title A-Z)
    -------------------------------------------------------------------------- */
 const projects = [
   {
     title: 'TermFS',
     category: 'software',
+    date: '2025-12',
     tags: ['Java', 'CLI', 'data structures', 'hash table', 'KMP'],
     image: 'assets/images/project-placeholder.svg',
     description: 'A terminal-based file system simulator that recreates UNIX commands such as '
@@ -269,6 +271,7 @@ const projects = [
   {
     title: 'Classroom Reservation System',
     category: 'software',
+    date: '2025-05',
     tags: ['Java', 'desktop app', 'booking', 'admin panel'],
     image: 'assets/images/project-placeholder.svg',
     description: 'A desktop app for booking KFUPM classrooms. Users can sign up, browse available '
@@ -278,6 +281,7 @@ const projects = [
   {
     title: 'Digital Queue Management System',
     category: 'hardware',
+    date: '2026-05',
     tags: ['Verilog', 'FPGA', 'digital logic', '7-segment display'],
     image: 'assets/images/project-placeholder.svg',
     description: 'A ticket and queue system, like the ones used in banks and clinics, running on an '
@@ -285,6 +289,21 @@ const projects = [
       + '7-segment displays and uses LEDs to signal when the queue is full.'
   }
 ];
+
+// How each sort option orders two projects. Dates are 'YYYY-MM' strings,
+// which sort correctly as plain text, so they need no parsing.
+const SORTERS = {
+  newest: function (a, b) { return b.date.localeCompare(a.date); },
+  oldest: function (a, b) { return a.date.localeCompare(b.date); },
+  title: function (a, b) { return a.title.localeCompare(b.title); }
+};
+
+// '2025-12' -> 'Dec 2025'
+function formatMonth(yearMonth) {
+  const parts = yearMonth.split('-');
+  return new Date(Number(parts[0]), Number(parts[1]) - 1, 1)
+    .toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+}
 
 function initProjects() {
   const grid = document.getElementById('project-grid');
@@ -294,12 +313,17 @@ function initProjects() {
   const empty = document.getElementById('project-empty');
   const emptyText = document.getElementById('project-empty-text');
   const clearButton = document.getElementById('clear-search');
+  const sortSelect = document.getElementById('project-sort');
 
-  if (!grid || !count || !search || !empty) return;
+  if (!grid || !count || !search || !empty || !sortSelect) return;
 
   // The category currently selected: 'all', 'software' or 'hardware'.
   let activeFilter = 'all';
   const FILTER_KEY = 'projectFilter';
+
+  // The sort order currently selected: 'newest', 'oldest' or 'title'.
+  let activeSort = 'newest';
+  const SORT_KEY = 'projectSort';
 
   // Selects a category and marks its button as pressed. The CSS styles
   // follow aria-pressed, so this is all it takes to update the buttons.
@@ -320,6 +344,13 @@ function initProjects() {
     setFilter(saved);
   }
 
+  // Restore the sort order the same way: only if it is still a real option.
+  const savedSort = storage.get(SORT_KEY);
+  if (Object.prototype.hasOwnProperty.call(SORTERS, savedSort)) {
+    activeSort = savedSort;
+  }
+  sortSelect.value = activeSort;
+
   // Builds one card element from one project object. textContent is used
   // instead of innerHTML so the text is always shown as text, never run as HTML.
   // index is the card's position in the grid. It staggers the fade-in so the
@@ -336,6 +367,11 @@ function initProjects() {
     const title = document.createElement('h3');
     title.textContent = project.title;
 
+    // The date is shown so the visitor can see why the cards are in this order.
+    const date = document.createElement('p');
+    date.className = 'project-date';
+    date.textContent = formatMonth(project.date);
+
     const description = document.createElement('p');
     description.textContent = project.description;
 
@@ -347,7 +383,7 @@ function initProjects() {
       tagList.appendChild(item);
     });
 
-    card.append(image, title, description, tagList);
+    card.append(image, title, date, description, tagList);
     return card;
   }
 
@@ -368,9 +404,14 @@ function initProjects() {
   // Works out which projects to show, rebuilds the grid and updates the count.
   function render() {
     const query = search.value.trim().toLowerCase();
-    const visible = projects.filter(function (project) {
-      return matches(project, query);
-    });
+
+    // Steps 1 and 2 (category + search) are in matches(), step 3 is the sort.
+    // filter() returns a new array, so sorting it never reorders `projects`.
+    const visible = projects
+      .filter(function (project) {
+        return matches(project, query);
+      })
+      .sort(SORTERS[activeSort]);
 
     // map passes (project, index) to createCard, which uses the index for the delay.
     grid.replaceChildren(...visible.map(createCard));
@@ -403,6 +444,12 @@ function initProjects() {
 
       render();
     });
+  });
+
+  sortSelect.addEventListener('change', function () {
+    activeSort = sortSelect.value;
+    storage.set(SORT_KEY, activeSort);
+    render();
   });
 
   // 'input' fires on every keystroke, so results update while typing.
