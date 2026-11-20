@@ -503,9 +503,16 @@ function initProjects() {
     card.className = 'project-card';
     card.style.animationDelay = (index * 60) + 'ms';
 
+    // width/height let the browser reserve the space before the image loads,
+    // so the page does not jump; lazy loading skips images that are off
+    // screen until the visitor scrolls near them.
     const image = document.createElement('img');
     image.src = project.image;
     image.alt = project.title + ' placeholder image';
+    image.width = 600;
+    image.height = 340;
+    image.loading = 'lazy';
+    image.decoding = 'async';
 
     const title = document.createElement('h3');
     title.textContent = project.title;
