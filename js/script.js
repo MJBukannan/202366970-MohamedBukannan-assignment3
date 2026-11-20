@@ -5,8 +5,9 @@
    1. Theme toggle   - light / dark, remembered between visits
    2. Contact form   - validation and feedback (front-end only, no backend)
    3. Scroll spy     - highlights the nav link for the section in view
-   4. Projects       - cards built from an array, with filter, search and
-                       sort; filter and sort are remembered between visits
+   4. Projects       - cards built from an array, with category filter,
+                       level selector, search and sort; every choice is
+                       remembered between visits
    5. GitHub repos   - latest public repos fetched from the GitHub API,
                        with loading, error and retry states
    6. Scroll reveal  - sections fade in as they scroll into view
@@ -252,15 +253,17 @@ function initScrollSpy() {
 /* --------------------------------------------------------------------------
    4. Projects
    The projects live in one array instead of being written out in the HTML.
-   Every time something changes, the grid is rebuilt in three steps:
+   Every time something changes, the grid is rebuilt in four steps:
      1. keep projects in the chosen category   (All / Software / Hardware)
-     2. keep projects that match the search text
-     3. sort what is left                      (Newest / Oldest / Title A-Z)
+     2. keep projects at the chosen level      (Any / Beginner / Medium / Hard)
+     3. keep projects that match the search text
+     4. sort what is left                      (Newest / Oldest / Title A-Z)
    -------------------------------------------------------------------------- */
 const projects = [
   {
     title: 'TermFS',
     category: 'software',
+    level: 'beginner',
     date: '2025-12',
     tags: ['Java', 'CLI', 'data structures', 'hash table', 'KMP'],
     image: 'assets/images/project-placeholder.svg',
@@ -271,6 +274,7 @@ const projects = [
   {
     title: 'Classroom Reservation System',
     category: 'software',
+    level: 'medium',
     date: '2025-05',
     tags: ['Java', 'desktop app', 'booking', 'admin panel'],
     image: 'assets/images/project-placeholder.svg',
@@ -281,6 +285,7 @@ const projects = [
   {
     title: 'Digital Queue Management System',
     category: 'hardware',
+    level: 'hard',
     date: '2026-05',
     tags: ['Verilog', 'FPGA', 'digital logic', '7-segment display'],
     image: 'assets/images/project-placeholder.svg',
@@ -289,6 +294,23 @@ const projects = [
       + '7-segment displays and uses LEDs to signal when the queue is full.'
   }
 ];
+
+// What each level is called on the cards, and the message shown above the
+// grid when the visitor picks it. 'all' has no message.
+const LEVELS = {
+  beginner: {
+    label: 'Beginner',
+    message: 'Beginner projects: where I learned the basics of logic, without building a user interface.'
+  },
+  medium: {
+    label: 'Medium',
+    message: 'Medium projects: where I learned to build a complete front end, with both logic and interface, but no back end.'
+  },
+  hard: {
+    label: 'Hard',
+    message: 'Hard projects: where I learned to work with low-level logic gates to build complex logic.'
+  }
+};
 
 // How each sort option orders two projects. Dates are 'YYYY-MM' strings,
 // which sort correctly as plain text, so they need no parsing.
@@ -309,17 +331,33 @@ function initProjects() {
   const grid = document.getElementById('project-grid');
   const count = document.getElementById('project-count');
   const search = document.getElementById('project-search');
-  const buttons = Array.from(document.querySelectorAll('.filter-btn'));
+  // [data-filter] and [data-level] keep the two button rows apart, since
+  // both use the same .filter-btn style.
+  const buttons = Array.from(document.querySelectorAll('.filter-btn[data-filter]'));
+  const levelButtons = Array.from(document.querySelectorAll('.filter-btn[data-level]'));
+  const levelMessage = document.getElementById('level-message');
   const empty = document.getElementById('project-empty');
   const emptyText = document.getElementById('project-empty-text');
   const clearButton = document.getElementById('clear-search');
   const sortSelect = document.getElementById('project-sort');
 
-  if (!grid || !count || !search || !empty || !sortSelect) return;
+  if (!grid || !count || !search || !empty || !sortSelect || !levelMessage) return;
 
   // The category currently selected: 'all', 'software' or 'hardware'.
   let activeFilter = 'all';
   const FILTER_KEY = 'projectFilter';
+
+  // The level currently selected: 'all', 'beginner', 'medium' or 'hard'.
+  let activeLevel = 'all';
+  const LEVEL_KEY = 'projectLevel';
+
+  // Marks the chosen level's button as pressed, like setFilter does.
+  function setLevel(value) {
+    activeLevel = value;
+    levelButtons.forEach(function (button) {
+      button.setAttribute('aria-pressed', String(button.dataset.level === value));
+    });
+  }
 
   // The sort order currently selected: 'newest', 'oldest' or 'title'.
   let activeSort = 'newest';
@@ -342,6 +380,12 @@ function initProjects() {
   });
   if (isKnown) {
     setFilter(saved);
+  }
+
+  // Restore the level the same way: 'all' or one of the LEVELS keys.
+  const savedLevel = storage.get(LEVEL_KEY);
+  if (savedLevel === 'all' || Object.prototype.hasOwnProperty.call(LEVELS, savedLevel)) {
+    setLevel(savedLevel);
   }
 
   // Restore the sort order the same way: only if it is still a real option.
@@ -370,7 +414,7 @@ function initProjects() {
     // The date is shown so the visitor can see why the cards are in this order.
     const date = document.createElement('p');
     date.className = 'project-date';
-    date.textContent = formatMonth(project.date);
+    date.textContent = LEVELS[project.level].label + ' · ' + formatMonth(project.date);
 
     const description = document.createElement('p');
     description.textContent = project.description;
@@ -387,9 +431,13 @@ function initProjects() {
     return card;
   }
 
-  // True when a project passes both the category filter and the search text.
+  // True when a project passes the category, the level and the search text.
   function matches(project, query) {
     if (activeFilter !== 'all' && project.category !== activeFilter) {
+      return false;
+    }
+
+    if (activeLevel !== 'all' && project.level !== activeLevel) {
       return false;
     }
 
@@ -405,7 +453,7 @@ function initProjects() {
   function render() {
     const query = search.value.trim().toLowerCase();
 
-    // Steps 1 and 2 (category + search) are in matches(), step 3 is the sort.
+    // Steps 1-3 (category, level, search) are in matches(), step 4 is the sort.
     // filter() returns a new array, so sorting it never reorders `projects`.
     const visible = projects
       .filter(function (project) {
@@ -417,10 +465,14 @@ function initProjects() {
     grid.replaceChildren(...visible.map(createCard));
     count.textContent = 'Showing ' + visible.length + ' of ' + projects.length + ' projects';
 
+    // A different message for each level; hidden for 'all'.
+    levelMessage.hidden = activeLevel === 'all';
+    levelMessage.textContent = activeLevel === 'all' ? '' : LEVELS[activeLevel].message;
+
     // Empty state: say why the grid is blank and offer a way back.
     if (visible.length === 0) {
       emptyText.textContent = query === ''
-        ? 'No projects in this category yet.'
+        ? 'No projects match this category and level yet.'
         : 'No projects match "' + search.value.trim() + '".';
       clearButton.hidden = query === '';
       empty.hidden = false;
@@ -442,6 +494,14 @@ function initProjects() {
 
       storage.set(FILTER_KEY, activeFilter);
 
+      render();
+    });
+  });
+
+  levelButtons.forEach(function (button) {
+    button.addEventListener('click', function () {
+      setLevel(button.dataset.level);
+      storage.set(LEVEL_KEY, activeLevel);
       render();
     });
   });

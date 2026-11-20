@@ -66,20 +66,35 @@
       <!-- Filter and search controls. The cards themselves are built by
            js/script.js from the projects array, so they are not written here. -->
       <div class="project-controls">
-        <div class="filter-buttons" role="group" aria-label="Filter projects by category">
-          <button type="button" class="filter-btn" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" class="filter-btn" data-filter="software" aria-pressed="false">Software</button>
-          <button type="button" class="filter-btn" data-filter="hardware" aria-pressed="false">Hardware</button>
+        <!-- Two button rows stacked: category on top, level underneath -->
+        <div class="filter-rows">
+          <div class="filter-buttons" role="group" aria-label="Filter projects by category">
+            <button type="button" class="filter-btn" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="filter-btn" data-filter="software" aria-pressed="false">Software</button>
+            <button type="button" class="filter-btn" data-filter="hardware" aria-pressed="false">Hardware</button>
+          </div>
+          <div class="filter-buttons" role="group" aria-label="Filter projects by level">
+            <button type="button" class="filter-btn" data-level="all" aria-pressed="true">Any level</button>
+            <button type="button" class="filter-btn" data-level="beginner" aria-pressed="false">Beginner</button>
+            <button type="button" class="filter-btn" data-level="medium" aria-pressed="false">Medium</button>
+            <button type="button" class="filter-btn" data-level="hard" aria-pressed="false">Hard</button>
+          </div>
         </div>
-        <label for="project-search" class="visually-hidden">Search projects</label>
-        <input type="search" id="project-search" class="project-search" placeholder="Search by title or tag">
-        <label for="project-sort" class="visually-hidden">Sort projects</label>
-        <select id="project-sort" class="project-sort">
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="title">Title A–Z</option>
-        </select>
+        <!-- Search and sort sit together on the right -->
+        <div class="search-sort">
+          <label for="project-search" class="visually-hidden">Search projects</label>
+          <input type="search" id="project-search" class="project-search" placeholder="Search by title or tag">
+          <label for="project-sort" class="visually-hidden">Sort projects</label>
+          <select id="project-sort" class="project-sort">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="title">Title A–Z</option>
+          </select>
+        </div>
       </div>
+
+      <!-- Message for the chosen level, filled in by js/script.js -->
+      <p class="level-message" id="level-message" hidden></p>
 
       <!-- aria-live makes screen readers announce the new count after filtering -->
       <p class="project-count" id="project-count" aria-live="polite"></p>
