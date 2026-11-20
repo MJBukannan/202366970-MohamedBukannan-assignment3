@@ -1,6 +1,7 @@
 /* ==========================================================================
    Interactivity for the portfolio site
 
+   0. Storage helper - safe localStorage access used by every feature
    1. Theme toggle   - light / dark, remembered between visits
    2. Contact form   - validation and feedback (front-end only, no backend)
    3. Scroll spy     - highlights the nav link for the section in view
@@ -25,6 +26,38 @@
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* --------------------------------------------------------------------------
+   0. Storage helper
+   Every feature that remembers something goes through this object. Storage
+   can be blocked (private browsing, strict settings), and that must never
+   break the page, so the try/catch lives here once instead of in every
+   feature. A blocked read returns null; a blocked write is simply skipped.
+   -------------------------------------------------------------------------- */
+const storage = {
+  get: function (key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  },
+  set: function (key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      /* Ignored: the setting still applies for this visit. */
+    }
+  },
+  remove: function (key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      /* Ignored. */
+    }
+  }
+};
+
+
+/* --------------------------------------------------------------------------
    1. Theme toggle
    The starting theme is chosen by the small script in <head> before the page
    is painted. This function only deals with the button.
@@ -45,13 +78,8 @@ function initThemeToggle() {
     const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     root.setAttribute('data-theme', next);
 
-    // Remember the choice for the next visit. Storage can be unavailable
-    // (private browsing), and that must not stop the toggle working.
-    try {
-      localStorage.setItem('theme', next);
-    } catch (error) {
-      /* Ignored: the theme still applies for this visit. */
-    }
+    // Remember the choice for the next visit.
+    storage.set('theme', next);
 
     syncButton();
   });
@@ -284,16 +312,12 @@ function initProjects() {
 
   // Restore the filter chosen on the last visit. It is only used if a button
   // with that value still exists, so an old or edited value cannot break the page.
-  try {
-    const saved = localStorage.getItem(FILTER_KEY);
-    const isKnown = buttons.some(function (button) {
-      return button.dataset.filter === saved;
-    });
-    if (isKnown) {
-      setFilter(saved);
-    }
-  } catch (error) {
-    /* Storage blocked (private browsing): start on 'all'. */
+  const saved = storage.get(FILTER_KEY);
+  const isKnown = buttons.some(function (button) {
+    return button.dataset.filter === saved;
+  });
+  if (isKnown) {
+    setFilter(saved);
   }
 
   // Builds one card element from one project object. textContent is used
@@ -375,11 +399,7 @@ function initProjects() {
     button.addEventListener('click', function () {
       setFilter(button.dataset.filter);
 
-      try {
-        localStorage.setItem(FILTER_KEY, activeFilter);
-      } catch (error) {
-        /* Ignored: the filter still works for this visit. */
-      }
+      storage.set(FILTER_KEY, activeFilter);
 
       render();
     });
