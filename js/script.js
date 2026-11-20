@@ -14,6 +14,8 @@
    7. Visit timer    - how long the visitor has had the page open
    8. Simulated login- log in, then give a name that is greeted and
                        remembered; log out clears both
+   9. Show / hide    - every section can be collapsed, remembered between
+                       visits
 
    All animation is skipped for visitors who have asked their system for
    reduced motion (see prefersReducedMotion and the CSS media query).
@@ -863,6 +865,55 @@ function initLogin() {
   render();
 }
 
+/* --------------------------------------------------------------------------
+   9. Show / hide sections
+   Any button with data-toggle="<id>" hides or shows that element. The ids
+   of the hidden parts are saved as a JSON list, so a hidden section is
+   still hidden on the next visit.
+   -------------------------------------------------------------------------- */
+function initSectionToggles() {
+  const buttons = Array.from(document.querySelectorAll('[data-toggle]'));
+
+  if (buttons.length === 0) return;
+
+  // Read the saved list. A missing or broken value just means nothing is hidden.
+  let hiddenIds = [];
+  try {
+    const saved = JSON.parse(storage.get('hiddenSections'));
+    if (Array.isArray(saved)) hiddenIds = saved;
+  } catch (error) {
+    /* Not valid JSON: start with everything shown. */
+  }
+
+  // Makes one button and its target match the list.
+  function apply(button) {
+    const target = document.getElementById(button.dataset.toggle);
+    if (!target) return;
+
+    const isHidden = hiddenIds.includes(target.id);
+    target.hidden = isHidden;
+    button.textContent = isHidden ? 'Show' : 'Hide';
+    // aria-expanded tells screen readers whether the part is open.
+    button.setAttribute('aria-expanded', String(!isHidden));
+  }
+
+  buttons.forEach(function (button) {
+    button.addEventListener('click', function () {
+      const id = button.dataset.toggle;
+
+      // Remove the id if it is in the list, add it if it is not.
+      hiddenIds = hiddenIds.includes(id)
+        ? hiddenIds.filter(function (item) { return item !== id; })
+        : hiddenIds.concat(id);
+
+      storage.set('hiddenSections', JSON.stringify(hiddenIds));
+      apply(button);
+    });
+
+    apply(button);
+  });
+}
+
 /* The script tag uses defer, so the HTML is already parsed by this point. */
 initThemeToggle();
 initContactForm();
@@ -872,3 +923,4 @@ initGitHubRepos();
 initScrollReveal();
 initVisitTimer();
 initLogin();
+initSectionToggles();

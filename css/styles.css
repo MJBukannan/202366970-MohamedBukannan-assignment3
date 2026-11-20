@@ -732,6 +732,36 @@ h3 {
   color: var(--color-accent-dark);
 }
 
+/* ---------- Show / hide sections ---------- */
+/* Heading and its Hide/Show button on one line */
+.section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.toggle-btn {
+  flex-shrink: 0;
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  background-color: var(--color-surface);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.toggle-btn:hover,
+.toggle-btn:focus {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
 /* The hidden attribute must win over display rules set above
    (for example .project-controls uses display: flex) */
 [hidden] {
