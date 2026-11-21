@@ -120,11 +120,10 @@ with a Retry button.
 
 ## Browser support
 
-Tested by hand in **Chrome** on macOS, and with automated Playwright runs in
+Tested by hand in **Chrome** and **Safari** on macOS, and with automated Playwright runs in
 Chromium at desktop, tablet and phone widths, with both APIs mocked to force the
 success, offline, rate-limit, timeout and retry states. Lighthouse was run in a
 Chrome Incognito window (so extensions could not affect the result).
-<!-- TODO: add Safari once tested by hand -->
 
 The features used — `fetch`, `async`/`await`, `AbortController`, `<dialog>`,
 `IntersectionObserver`, the Page Visibility API, CSS custom properties and Web

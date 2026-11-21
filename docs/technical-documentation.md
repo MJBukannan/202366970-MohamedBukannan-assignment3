@@ -1,9 +1,10 @@
 # Technical Documentation
 
 Personal portfolio website built for SWE 363 (Web Engineering and Development),
-Assignment 2: Interactive Features. It extends the Assignment 1 site. The site
-is still a single static page with no build step, no dependencies and no
-backend; the only outside service it talks to is the public GitHub API.
+Assignment 3: Advanced Functionality. It extends the Assignment 1 and 2 site.
+The site is still a single static page with no build step, no dependencies and
+no backend; the only outside services it talks to are the public GitHub API and
+the Open-Meteo weather API.
 
 ## Contents
 
@@ -14,37 +15,45 @@ backend; the only outside service it talks to is the public GitHub API.
 5. [Responsive design](#responsive-design)
 6. [Theming](#theming)
 7. [JavaScript features](#javascript-features)
-8. [Animations and reduced motion](#animations-and-reduced-motion)
-9. [Accessibility](#accessibility)
-10. [Performance](#performance)
-11. [Browser and device testing](#browser-and-device-testing)
-12. [Known limitations](#known-limitations)
+8. [What the site remembers](#what-the-site-remembers)
+9. [Animations and reduced motion](#animations-and-reduced-motion)
+10. [Accessibility](#accessibility)
+11. [Performance](#performance)
+12. [Browser and device testing](#browser-and-device-testing)
+13. [Known limitations](#known-limitations)
 
 ## Requirement map
 
-Where each Assignment 2 requirement is implemented:
+Where each Assignment 3 requirement is implemented (all functions are in
+`js/script.js`):
 
 | Requirement | Feature | Where |
 |---|---|---|
-| Dynamic content | Projects rendered from data; filter buttons; live search; result count | `projects` array and `initProjects()` in `js/script.js`; `.project-controls` in `index.html` |
-| Data handling | GitHub repositories fetched from the API | `initGitHubRepos()` in `js/script.js`; `#github` section in `index.html` |
-| Data handling | Last chosen filter remembered | `setFilter()` and the `projectFilter` key in `initProjects()` |
-| Animation and transitions | Sections fade up on scroll | `initScrollReveal()`; `.reveal` / `.is-visible` in `css/styles.css` |
-| Animation and transitions | Cards fade in, staggered, on every filter or search | `@keyframes fade-up`; `animationDelay` in `createCard()` |
-| Animation and transitions | Form success message slides in, every time | `.form-status.success`; `setStatus()` in `initContactForm()` |
-| Error handling and feedback | Loading, error and Retry states for the GitHub request | `showLoading()`, `showError()`, `loadRepos()` |
-| Error handling and feedback | Empty search state with Clear search | `#project-empty` in `index.html`; end of `render()` |
-| (extra) Accessibility | Reduced-motion support | `prefersReducedMotion` in `js/script.js`; `@media (prefers-reduced-motion: reduce)` in CSS |
+| API integration | Live weather at KFUPM from Open-Meteo | `initWeather()`, `WEATHER_URL`, `describeWeather()`; `#weather` section in `index.html` |
+| API integration | Latest GitHub repositories, now cached and with a timeout | `initGitHubRepos()`; `#github` section |
+| API integration | Shared request handling and friendly error messages with Retry | `fetchJSON()`, `friendlyError()`, `showStatusError()` |
+| Complex logic | Sort (Newest / Oldest / Title A–Z) combined with filter and search | `SORTERS`, `render()` in `initProjects()`; `#project-sort` |
+| Complex logic | Level selector with a different message per level | `LEVELS`, `setLevel()`, `matches()`; `.filter-btn[data-level]`, `#level-message` |
+| Complex logic | Visit timer that pauses while the tab is hidden | `initVisitTimer()`; `#visit-timer` in the footer |
+| State management | Simulated login, then the visitor's name; greeting and contact form pre-fill; log out | `initLogin()`; `#login-button`, `#login-dialog`, `#greeting` |
+| State management | Hide / Show on every section, remembered | `initSectionToggles()`; `[data-toggle]` buttons and `*-body` wrappers |
+| State management | Category, level, sort and theme remembered | `storage` helper; keys listed in [What the site remembers](#what-the-site-remembers) |
+| Performance | Lazy images with reserved size, `preconnect`, response caching, merged CSS, Lighthouse 100 | `createCard()`; `<head>` in `index.html`; [Performance](#performance) |
+
+Features carried over from Assignments 1 and 2 (theme, contact form, scroll
+spy, projects from data with filter and search, GitHub section, scroll reveal,
+animations, reduced motion) are described below as well, with the parts that
+changed in Assignment 3 called out.
 
 ## File structure
 
 ```
-202366970-MohamedBukannan-assignment2/
-├── index.html                       Single page: About, Projects, GitHub, Contact
+202366970-MohamedBukannan-assignment3/
+├── index.html                       Single page: About, Projects, GitHub, Weather, Contact
 ├── css/
 │   └── styles.css                   All styling, organised by component
 ├── js/
-│   └── script.js                    All interactivity, six features
+│   └── script.js                    All interactivity, one init function per feature
 ├── assets/
 │   └── images/
 │       └── project-placeholder.svg  Placeholder used by the project cards
@@ -62,66 +71,116 @@ live in one file, with comment headers dividing each file into sections.
 
 | Element | Purpose |
 |---|---|
-| `<header class="site-header">` | Sticky bar: name, navigation, theme toggle |
-| `<nav class="nav">` | Anchor links to About, Projects, GitHub and Contact |
-| `<section id="about">` | Name, tagline and a short intro paragraph |
-| `<section id="projects">` | Filter buttons, search box, result count, an empty `#project-grid` filled by JavaScript, and a hidden `#project-empty` box |
-| `<section id="github">` | `#repo-status` for loading and error messages, and an empty `#repo-list` filled by JavaScript |
+| `<header class="site-header">` | Sticky bar: name, navigation, **Log in** and **Dark mode** buttons (in `.header-actions`) |
+| `<nav class="nav">` | Anchor links to About, Projects, GitHub, Weather and Contact |
+| `<dialog id="login-dialog">` | The simulated login window, with two forms: `#login-form` (step 1) and `#name-form` (step 2) |
+| `<section id="about">` | Name, tagline, intro paragraph and the `#greeting` line shown after login |
+| `<section id="projects">` | Two rows of filter buttons (category and level), search box, sort menu, level message, result count, the `#project-grid` filled by JavaScript, and the `#project-empty` box |
+| `<section id="github">` | `#repo-status` for loading and error messages and the `#repo-list` filled by JavaScript |
+| `<section id="weather">` | `#weather-status` for loading and error messages, the `#weather-card` filled by JavaScript, and the Open-Meteo credit |
 | `<section id="contact">` | Contact form (front-end only) |
-| `<footer class="site-footer">` | Copyright line |
+| `<footer class="site-footer">` | Copyright line and the `#visit-timer` line |
 
-**The project cards are no longer written in the HTML.** In Assignment 1 each
-card was a hand-written `<article>`. They now live as data in `js/script.js`
-and are built at load time, so filtering and searching only decide *which*
-items to show. A `<noscript>` message covers visitors with JavaScript turned
-off.
+**Every section has the same shape.** The heading and its Hide/Show button sit
+together in a `.section-head`, and everything else in the section is wrapped in
+one element with an id ending in `-body` (`about-body`, `projects-body`, and so
+on). The button names its target with `data-toggle="projects-body"`, so one
+function handles every section.
 
-**States are driven by attributes.** The filter buttons use `aria-pressed`, the
-empty-state box uses the `hidden` attribute, and the GitHub status area uses
-`role="status"`. The same attribute that styles a state also announces it to
-assistive technology, so the two cannot drift apart.
+**The project cards are not written in the HTML.** They live as data in
+`js/script.js` and are built at load time, so filtering, searching and sorting
+only decide *which* items to show and in what order. A `<noscript>` message
+covers visitors with JavaScript turned off.
+
+**States are driven by attributes.** The filter and level buttons use
+`aria-pressed`, the Hide/Show buttons use `aria-expanded`, hidden parts use the
+`hidden` attribute, and the status areas use `role="status"`. The same attribute
+that styles a state also announces it to assistive technology, so the two
+cannot drift apart.
+
+**The login window is a native `<dialog>`.** Opened with `showModal()`, the
+browser dims the page behind it, keeps keyboard focus inside it, and closes it
+when Escape is pressed, with no extra code for any of that.
 
 Two scripts are loaded: a small inline script in `<head>` that applies the
 colour theme before the first paint (see [Theming](#theming)), and
 `js/script.js` with `defer`, so it runs after the HTML is parsed without
-blocking rendering.
+blocking rendering. `<head>` also has two `preconnect` hints for the API hosts
+(see [Performance](#performance)).
 
 ## CSS approach
 
 **Design tokens.** All colours, the font stack, the corner radius, the shadow
-and the maximum content width are custom properties on `:root`. Every rule —
-including all the new Assignment 2 components (filter pills, search box, tags,
-repo cards, error box, empty state) — uses `var(--...)`, so the dark theme
-works for the new parts with no extra CSS.
+and the maximum content width are custom properties on `:root`. Every rule,
+including all the Assignment 3 components (level message, sort menu, login
+dialog, greeting, Hide/Show buttons, weather card), uses `var(--...)`, so the
+dark theme works for the new parts with no extra CSS.
 
-**Consistent components.** The filter buttons reuse the pill shape of the
-Assignment 1 theme toggle, and the repo cards reuse the border, radius and
-shadow of the project cards, so the new sections look like part of the same
-site.
+**Shared rules instead of copies.** In Assignment 3 the three pill-shaped
+buttons (the header buttons, the filter and level buttons, and the Hide/Show
+buttons) were defined by three nearly identical blocks. They now share one rule,
+and each only adds what is different:
 
-**Layout.** Flexbox for one-dimensional rows (header, filter bar, tag lists,
-error box); CSS Grid for the two card grids (`.project-grid` and `.repo-list`).
+```css
+.theme-toggle,
+.filter-btn,
+.toggle-btn {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  /* ...shared look... */
+}
 
-**Organisation.** `styles.css` runs: tokens → dark theme → base → header and
-navigation → sections → About → Projects → project filter and search → Latest
-on GitHub → empty search state → animations and reduced motion → contact form →
-footer → media queries.
+.toggle-btn {            /* only what is different */
+  flex-shrink: 0;
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+}
+```
+
+In the same way, the login dialog's fields and buttons reuse the contact form's
+rules (`.contact-form input, .dialog-form input { ... }`) instead of copying
+them.
+
+**One rule for `hidden`.** Several elements have a `display` value set by a
+class (for example `display: flex`), which would beat the browser's default
+styling for the `hidden` attribute. One global rule makes `hidden` always win:
+
+```css
+[hidden] {
+  display: none !important;
+}
+```
+
+**Layout.** Flexbox for one-dimensional rows (header, filter rows, search and
+sort, tag lists, dialog buttons, weather card); CSS Grid for the two card grids
+(`.project-grid` and `.repo-list`).
 
 ## Responsive design
 
 Two `max-width` breakpoints, so desktop is the default and each query narrows
 it:
 
-| Width | Project grid and repo list | Header | Search box |
+| Width | Project grid and repo list | Header | Filter rows, search and sort |
 |---|---|---|---|
-| Above 768px | 3 columns | Row | Up to 320px, right of the filters |
-| 768px and below | 2 columns | Row | Wraps below the filters if needed |
-| 480px and below | 1 column | Stacked | Full width |
+| Above 768px | 3 columns | Row | Two button rows stacked on the left, search and sort on the right |
+| 768px and below | 2 columns | Row | Same, the search box narrower |
+| 480px and below | 1 column | Stacked; nav links wrap onto two centred lines | Search and sort move below the buttons and share one row |
 
-The filter bar uses `flex-wrap`, so the buttons and the search box move onto
-separate lines on narrow screens instead of overflowing. Long repository names
-use `overflow-wrap: anywhere`, so they break inside the card rather than
-widening it.
+The two button rows sit in a `.filter-rows` column, and search and sort sit
+together in `.search-sort`. The controls bar uses `flex-wrap`, so on a narrow
+screen `.search-sort` drops below the buttons instead of overflowing. The
+search box has `min-width: 0`; without it a flex item will not shrink below its
+content width, and on a phone it pushed the sort menu past the screen edge.
+
+The navigation gained a fifth link (Weather) in Assignment 3, which made it
+366px wide, too wide for a 320px phone. Below 480px the links now use
+`flex-wrap: wrap` and `justify-content: center`, so they wrap onto a second,
+centred line instead of making the page scroll sideways.
+
+The weather card is a flex row with a maximum width of 480px, so it stays
+compact on desktop and fills the width on a phone.
 
 ## Theming
 
@@ -167,28 +226,93 @@ rather than leaving them light.
 
 ## JavaScript features
 
-`js/script.js` is organised as six `init` functions called at the bottom of the
-file. Each starts by looking up its own elements and returns early if they are
-missing, so a change to the markup cannot crash the rest of the page. Features
-1–3 are from Assignment 1; 4–6 are new, and the form and theme code gained small
-changes described below.
+`js/script.js` is organised into small sections, each with one `init`
+function, all called at the bottom of the file. Each `init` function starts by
+looking up its own elements and returns early if they are missing, so a change
+to the markup cannot crash the rest of the page.
 
-All text that comes from data — project fields and, especially, GitHub
-responses — is inserted with `textContent`, never `innerHTML`, so it is always
-displayed as text and can never run as HTML.
+| # | Section | Status |
+|---|---|---|
+| 0 | `storage` helper | New in A3 |
+| 0b | `fetchJSON`, `friendlyError`, `showStatusError` | New in A3 |
+| 1 | Theme toggle | A1, now uses `storage` |
+| 2 | Contact form | A1 |
+| 3 | Scroll spy | A1 |
+| 4 | Projects: filter, level, search, sort | A2, level and sort new in A3 |
+| 5 | Latest on GitHub | A2, now uses `fetchJSON` |
+| 6 | Scroll reveal | A2 |
+| 7 | Visit timer | New in A3 |
+| 8 | Simulated login | New in A3 |
+| 9 | Show / hide sections | New in A3 |
+| 10 | Weather | New in A3 |
 
-### 1. Theme toggle
+All text that comes from data — project fields, the visitor's name and,
+especially, API responses — is inserted with `textContent`, never `innerHTML`,
+so it is always displayed as text and can never run as HTML.
 
-The button in the header flips `data-theme` on `<html>`, writes the new value
-to `localStorage`, and updates its own `aria-pressed` attribute. The starting
-theme is not recalculated here — it is read from the attribute the inline
-script already set, so the logic exists in only one place.
+### 0. Storage helper (`storage`)
 
-`aria-pressed` doubles as the styling hook
-(`.theme-toggle[aria-pressed="true"]`), which keeps the visual state and the
-state announced to assistive technology from drifting apart.
+Every feature that remembers something goes through one small object:
 
-### 2. Contact form validation
+```js
+const storage = {
+  get: function (key) {
+    try { return localStorage.getItem(key); }
+    catch (error) { return null; }
+  },
+  set: function (key, value) {
+    try { localStorage.setItem(key, value); }
+    catch (error) { /* ignored */ }
+  },
+  remove: function (key) { /* same pattern */ }
+};
+```
+
+`localStorage` throws an error when storage is blocked, for example in some
+private-browsing modes. Before Assignment 3 every feature wrapped its own reads
+and writes in `try`/`catch`; now that is written once. A blocked read behaves
+like "nothing saved yet" and a blocked write is skipped, so every feature keeps
+working for the current visit.
+
+### 0b. Fetch helper (`fetchJSON`)
+
+Both API sections load data the same way, so the shared steps live in one
+`async` function:
+
+```js
+const data = await fetchJSON(url, { cacheKey: 'weather', maxAgeMs: 15 * 60 * 1000 });
+```
+
+1. **Cache.** If `cacheKey` is given and `sessionStorage` holds a copy saved
+   less than `maxAgeMs` ago, that copy is returned and no request is made.
+   Each copy is stored as `{ savedAt, data }`.
+2. **Timeout.** An `AbortController` is created and `setTimeout` aborts the
+   request after `timeoutMs` (8 seconds by default), so a server that never
+   answers ends in an error instead of "Loading…" forever.
+3. **Status check.** `fetch` only rejects when no answer arrives at all, so
+   `response.ok` is checked by hand. 403 and 429 become `'rate-limit'`, any
+   other failure `'http-<status>'`.
+4. **Save.** The parsed JSON is saved to `sessionStorage` with the current time
+   and returned.
+
+Failures are thrown as short codes (`'timeout'`, `'rate-limit'`, `'network'`,
+`'http-404'`). `friendlyError(error, service, what)` turns a code into a
+sentence, for example *"GitHub is limiting requests right now. Wait a minute,
+then try again."*, and `showStatusError(status, message, retry)` puts that
+sentence and a **Retry** button into a section's status area. Both API sections
+use the same two functions, so errors look and behave the same everywhere.
+
+`sessionStorage` is used rather than `localStorage` because the cache should
+not outlive the browser tab: a visitor who comes back tomorrow gets fresh data.
+
+### 1. Theme toggle (`initThemeToggle`)
+
+The button in the header flips `data-theme` on `<html>`, saves the new value
+with `storage.set('theme', ...)`, and updates its own `aria-pressed` attribute.
+The starting theme is not recalculated here — it is read from the attribute the
+inline script already set, so the logic exists in only one place.
+
+### 2. Contact form validation (`initContactForm`)
 
 The form has no backend. Without JavaScript a `<form>` with no `action`
 submits to the current URL, so the browser reloads the page and appends the
@@ -226,12 +350,12 @@ have reached it. Once a message is showing, it clears as soon as typing makes
 the field valid again.
 
 Because nothing is sent anywhere, the success message says so rather than
-claiming the message was delivered. In Assignment 2 the message also animates
-in on every submit (see [Animations](#animations-and-reduced-motion)). An earlier draft showed a "Sending…" state
-on the button; it was removed, since simulating a request that does not exist
-misrepresents what the page does.
+claiming the message was delivered, and it animates in on every submit (see
+[Animations](#animations-and-reduced-motion)). In Assignment 3 the Name field is
+filled in automatically after a visitor logs in (see
+[Simulated login](#8-simulated-login-initlogin)).
 
-### 3. Scroll spy
+### 3. Scroll spy (`initScrollSpy`)
 
 `IntersectionObserver` reports when a section enters or leaves the viewport,
 and the matching navigation link is given an `active` class:
@@ -254,69 +378,102 @@ positions on every frame — runs hundreds of times a second on the main thread.
 `IntersectionObserver` is handled by the browser and only calls back when a
 threshold is actually crossed.
 
-### 4. Projects: data, filter and search (`initProjects`)
+### 4. Projects: filter, level, search and sort (`initProjects`)
 
-**Data.** Each project is an object in the `projects` array:
+**Data.** Each project is an object in the `projects` array. Assignment 3 added
+`level` and `date`:
 
 ```js
 {
   title: 'TermFS',
   category: 'software',
+  level: 'beginner',
+  date: '2025-12',
   tags: ['Java', 'CLI', 'data structures', 'hash table', 'KMP'],
   image: 'assets/images/project-placeholder.svg',
   description: 'A terminal-based file system simulator ...'
 }
 ```
 
-Adding a project means adding one object; no HTML is copied.
+The dates are the months each project was submitted (ICS 108 in May 2025,
+ICS 202 in December 2025, COE 203 in May 2026). The levels follow my own
+definitions:
 
-**Building a card.** `createCard(project, index)` creates the `<article>`,
-image, heading, description and a `<ul class="tag-list">`, fills them with
-`textContent`, and returns the element.
+| Level | Meaning | Project |
+|---|---|---|
+| Beginner | The basics of logic, without building a user interface | TermFS |
+| Medium | A complete front end, with both logic and interface, but no back end | Classroom Reservation System |
+| Hard | Low-level logic gates used to build complex logic | Digital Queue Management System |
 
-**Deciding what to show.** `matches(project, query)` applies two tests in
-order: the project must be in the active category (unless the filter is
-`all`), and if there is search text, it must appear in the project's title or
-tags. Title and tags are joined and lower-cased first, so the search is
-case-insensitive.
+**The four-step pipeline.** Every change goes through one function, which
+builds the grid in the same order each time:
 
-**Rendering.** Every change goes through one function:
+1. keep projects in the chosen **category** (All / Software / Hardware)
+2. keep projects at the chosen **level** (Any / Beginner / Medium / Hard)
+3. keep projects whose title or tags contain the **search** text
+4. **sort** what is left (Newest / Oldest / Title A–Z)
 
 ```js
-function render() {
-  const query = search.value.trim().toLowerCase();
-  const visible = projects.filter(function (project) {
-    return matches(project, query);
-  });
-
-  grid.replaceChildren(...visible.map(createCard));
-  count.textContent = 'Showing ' + visible.length + ' of ' + projects.length + ' projects';
-  // ...empty state, below
-}
+const visible = projects
+  .filter(function (project) { return matches(project, query); })  // steps 1-3
+  .sort(SORTERS[activeSort]);                                      // step 4
 ```
 
-`replaceChildren` swaps the whole grid in one operation. `map` passes each
-project's position as the second argument, which `createCard` uses to stagger
-the animation.
+`matches()` returns `false` as soon as one test fails. `filter()` returns a new
+array, so sorting it never changes the order of the original `projects` list.
 
-**Events.** A filter button click calls `setFilter()` and `render()`. The
-search box listens for `input`, which fires on every keystroke (and when the
-browser's built-in clear button is used), so results update while typing.
+**Sorting.** `SORTERS` maps each menu option to a compare function:
 
-**Empty state.** When nothing matches, the end of `render()` fills
-`#project-empty` with `No projects match "…".` and un-hides it, instead of
-leaving a blank grid. The Clear search button empties the box, calls `render()`
-and returns focus to the search box. If a category were ever empty with no
-search text, the message reads "No projects in this category yet." and the
-Clear button is hidden, because there would be nothing to clear.
+```js
+const SORTERS = {
+  newest: function (a, b) { return b.date.localeCompare(a.date); },
+  oldest: function (a, b) { return a.date.localeCompare(b.date); },
+  title:  function (a, b) { return a.title.localeCompare(b.title); }
+};
+```
 
-**Remembered filter.** `setFilter(value)` stores the active category and sets
-`aria-pressed` on every button; the pressed style follows that attribute. Each
-click saves the value under the `localStorage` key `projectFilter`. On load the
-saved value is read back and only applied if a button with that value exists,
-so an outdated or edited value cannot leave the page in a broken state. Both
-reads and writes are wrapped in `try`/`catch`, as with the theme, because
-storage can be blocked.
+Dates are stored as `'YYYY-MM'` text. Because the year comes first and the
+month always has two digits, comparing them as text gives the same order as
+comparing them as dates, so no date parsing is needed. Swapping `a` and `b`
+reverses the order. The full month is kept (not just the year) because two
+projects are from 2025; with the year alone, Newest first could not tell them
+apart.
+
+**Levels and messages.** `LEVELS` holds, for each level, the label shown on the
+cards and the message shown above the grid:
+
+```js
+const LEVELS = {
+  beginner: { label: 'Beginner', message: 'Beginner projects: where I learned the basics of logic, ...' },
+  medium:   { label: 'Medium',   message: 'Medium projects: where I learned to build a complete front end, ...' },
+  hard:     { label: 'Hard',     message: 'Hard projects: where I learned to work with low-level logic gates, ...' }
+};
+```
+
+`render()` shows the message for the chosen level in `#level-message` and hides
+it for Any level. Each card shows its level and month, for example
+"Hard · May 2026", produced by `formatMonth()`.
+
+**Two button rows.** The category and level buttons share the `.filter-btn`
+style, so they are told apart by attribute: `[data-filter]` for category and
+`[data-level]` for level. Without that, the category code would also pick up
+the level buttons.
+
+**Remembered choices.** Category, level and sort are saved under
+`projectFilter`, `projectLevel` and `projectSort`. On load each saved value is
+applied only if it is still a real option (a button with that value exists, or
+the key exists in `LEVELS` / `SORTERS`), so an old or hand-edited value falls
+back to the default instead of breaking the page.
+
+**Empty state.** When nothing matches, `#project-empty` explains why: with
+search text, `No projects match "…".` with a Clear search button; without it,
+"No projects match this category and level yet.", for example Hard + Software.
+
+**Building a card.** `createCard(project, index)` creates the `<article>`,
+image, heading, level-and-date line, description and tag list, fills them with
+`textContent`, and staggers the fade-in by `index`. The image gets
+`width`/`height`, `loading="lazy"` and `decoding="async"` (see
+[Performance](#performance)).
 
 ### 5. Latest on GitHub (`initGitHubRepos`)
 
@@ -329,40 +486,25 @@ const url = 'https://api.github.com/users/MJBukannan/repos?sort=updated&per_page
 The public GitHub REST API needs no key. `sort=updated` returns the most
 recently changed repositories first.
 
-**Three states.**
+**`loadRepos()`.**
 
-| State | What the visitor sees | Function |
-|---|---|---|
-| Loading | "Loading repositories…" | `showLoading()` |
-| Success | Up to six repo cards: name (links to GitHub), description, language, last-updated date | `createRepoCard()` |
-| Error | A message and a **Retry** button inside a bordered box | `showError(message)` |
+1. Shows "Loading repositories…" and empties the list.
+2. Calls `fetchJSON(url, { cacheKey: 'githubRepos', maxAgeMs: 10 minutes })`.
+   GitHub allows only 60 unauthenticated requests an hour per IP address, so a
+   reload within 10 minutes reuses the saved answer.
+3. Removes forks (other people's projects) and keeps the first six
+   (`REPO_LIMIT`).
+4. Shows "No public repositories yet." if nothing is left; otherwise replaces
+   the list with repo cards (name linking to GitHub, description, language,
+   last-updated date).
+5. On any error, calls `showStatusError()` with the message from
+   `friendlyError()`. Retry calls `loadRepos()` again.
 
-**`loadRepos()` step by step.**
+In Assignment 2 this section had its own loading and error functions; they were
+replaced by the shared helpers, which also added the cache and the timeout.
 
-1. It is an `async` function, so it can `await` the network. Only this function
-   pauses; the rest of the page stays responsive.
-2. `await fetch(url)` sends the request.
-3. `response.ok` is checked. `fetch` only rejects when no answer arrives at all
-   (offline, DNS failure). An HTTP error such as 403 is still a successful
-   *response*, so the script checks the status itself and throws. A 403 or 429
-   means GitHub's rate limit for unauthenticated requests (60 per hour per IP
-   address) was hit, and gets its own message.
-4. `await response.json()` parses the array of repositories.
-5. Forks are removed (they are other people's projects) and the list is cut to
-   `REPO_LIMIT` (6).
-6. If nothing remains, "No public repositories yet." is shown; otherwise the
-   cards replace the list.
-7. Any failure in steps 2–5 lands in `catch`, which calls `showError()` with the
-   rate-limit message or a general "check your internet connection" message.
-
-The Retry button simply calls `loadRepos()` again, which starts over from the
-loading state.
-
-**Details.** Links open in a new tab with `rel="noopener"`, which stops the new
-tab from getting a reference back to this page. Dates use `pushed_at` (falling
-back to `updated_at`) and are formatted with `toLocaleDateString('en-GB', …)`,
-for example "13 Oct 2026". A missing language or description gets readable
-fallback text.
+Links open in a new tab with `rel="noopener"`, which stops the new tab from
+getting a reference back to this page.
 
 ### 6. Scroll reveal (`initScrollReveal`)
 
@@ -381,6 +523,145 @@ is simply visible.
 
 Smooth scrolling is still one CSS declaration (`html { scroll-behavior: smooth; }`)
 rather than JavaScript. It is turned off under reduced motion.
+
+### 7. Visit timer (`initVisitTimer`)
+
+The footer shows how long the visitor has had the page open, updated every
+second:
+
+| Time on page | Shown as |
+|---|---|
+| Under a minute | `42s` |
+| Under an hour | `2m 13s` |
+| An hour or more | `1h 2m 34s` |
+
+The timer only counts while the tab is **visible**. It keeps two numbers:
+`countedMs` (time from earlier visible stretches) and `startedAt` (when the
+current stretch began). The Page Visibility API drives it:
+
+```js
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden && intervalId !== null) {
+    pause();   // countedMs += performance.now() - startedAt; stop the interval
+  } else if (!document.hidden && intervalId === null) {
+    start();   // startedAt = performance.now(); start the interval
+  }
+});
+```
+
+Time is measured with `performance.now()`, not by counting interval ticks.
+Browsers slow down `setInterval` in background tabs, so a tick counter would
+drift; reading the clock each second is always accurate. If the page loads in a
+background tab, counting only starts once it is first seen. The timer is not
+saved: it measures the current visit.
+
+### 8. Simulated login (`initLogin`)
+
+The page has two states, logged out and logged in, saved under `loggedIn` and
+`visitorName`.
+
+**Logging in takes two steps inside the dialog:**
+
+1. **Username and password.** Both must be filled in; each empty field gets its
+   own message ("Username is required." / "Password is required.") and
+   `aria-invalid`. Any non-empty values are accepted, because there is no
+   server to check them against, and the dialog says so. On success,
+   `loggedIn` is saved and the username is saved as the name for now.
+2. **"What should I call you?"** The name box starts filled with the username.
+   On Save the name is trimmed, repeated spaces are collapsed, it is cut to 40
+   characters, and it is saved. An empty name shows "Please enter a name."
+
+The username is saved as the name in step 1 on purpose: if the visitor presses
+Escape or Cancel during step 2, they are still logged in and are greeted by
+their username, instead of being stuck logged in with no name.
+
+**Updating the page.** `render()` makes the page match the saved state:
+
+- logged in: the header button reads **Log out**, the About section shows
+  "Welcome back, *name*!", and the contact form's Name field is filled in if
+  the visitor has not typed in it;
+- logged out: the button reads **Log in** and the greeting is hidden.
+
+`render()` runs on load and on the dialog's `close` event. That event fires
+however the dialog closes (Save, Cancel or Escape), so there is one place that
+updates the page instead of three.
+
+**Logging out** removes both keys, clears the contact form's Name field if it
+still holds the saved name, and calls `render()`.
+
+### 9. Show / hide sections (`initSectionToggles`)
+
+Every button with a `data-toggle` attribute hides or shows the element whose
+id it names. The ids of hidden parts are kept as a list and saved as JSON:
+
+```js
+hiddenIds = hiddenIds.includes(id)
+  ? hiddenIds.filter(function (item) { return item !== id; })  // was hidden: show it
+  : hiddenIds.concat(id);                                       // was shown: hide it
+
+storage.set('hiddenSections', JSON.stringify(hiddenIds));
+```
+
+`apply(button)` then sets the target's `hidden` attribute, changes the button
+text to **Show** or **Hide**, and updates `aria-expanded`. On load the saved
+list is read back with `JSON.parse` inside `try`/`catch`; a missing or broken
+value simply means nothing is hidden. Because the function only reads
+`data-toggle`, adding a Hide button to a new section needs no JavaScript.
+
+### 10. Weather (`initWeather`)
+
+**The request.** Open-Meteo is free and needs no API key or account, so the
+section also works for anyone grading the site.
+
+```js
+const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast'
+  + '?latitude=26.31&longitude=50.14'
+  + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code'
+  + '&timezone=Asia%2FRiyadh';
+```
+
+The coordinates are KFUPM in Dhahran; `current=` asks only for the five values
+the card shows, which keeps the response small.
+
+**`loadWeather()`.**
+
+1. Hides the card and shows "Loading weather…".
+2. Calls `fetchJSON` with a 15-minute cache (weather changes slowly).
+3. Checks the answer actually contains a numeric `temperature_2m`, in case the
+   API ever changes shape; if not, it is treated as an error.
+4. Fills each `[data-weather="…"]` element: rounded temperature, conditions,
+   feels-like, humidity, wind, and the update time (the `HH:MM` part of
+   `current.time`).
+5. On any error, shows the friendly message with Retry, the same way as the
+   GitHub section.
+
+**Turning the weather code into words.** Open-Meteo describes the sky with a
+WMO code (0 = clear, 2 = partly cloudy, 61 = rain, …). The codes come in
+ranges, so `WEATHER_CODES` lists the highest code of each range, and
+`describeWeather()` returns the first entry the code fits under:
+
+```js
+const WEATHER_CODES = [[0, 'Clear sky'], [3, 'Partly cloudy'], [48, 'Foggy'], /* ... */ [99, 'Thunderstorm']];
+```
+
+The section credits Open-Meteo with a link, as its terms ask.
+
+## What the site remembers
+
+| Key | Storage | Value | Set by |
+|---|---|---|---|
+| `theme` | localStorage | `light` / `dark` | Theme toggle |
+| `projectFilter` | localStorage | `all` / `software` / `hardware` | Category buttons |
+| `projectLevel` | localStorage | `all` / `beginner` / `medium` / `hard` | Level buttons |
+| `projectSort` | localStorage | `newest` / `oldest` / `title` | Sort menu |
+| `loggedIn` | localStorage | `true` (absent when logged out) | Login |
+| `visitorName` | localStorage | the visitor's name | Login, step 2 |
+| `hiddenSections` | localStorage | JSON list of hidden `*-body` ids | Hide / Show buttons |
+| `githubRepos` | sessionStorage | `{ savedAt, data }`, reused for 10 minutes | `fetchJSON` |
+| `weather` | sessionStorage | `{ savedAt, data }`, reused for 15 minutes | `fetchJSON` |
+
+Nothing is sent to any server: the login, the name and every choice stay in the
+visitor's own browser.
 
 ## Animations and reduced motion
 
@@ -414,7 +695,8 @@ removes the class, reads `status.offsetWidth` (which forces the browser to apply
 that change immediately), and then adds the class again, so the message animates
 on every submit.
 
-**Empty state.** The empty-search box also fades up when it appears.
+**Empty state and weather card.** The empty-search box and the weather card
+also fade up when they appear.
 
 **Reduced motion.** Visitors who turn on *Reduce motion* (macOS: System Settings
 → Accessibility → Display; iOS: Settings → Accessibility → Motion) get every
@@ -434,81 +716,132 @@ some people, and supporting the system setting costs about ten lines.
 ## Accessibility
 
 - Semantic landmarks: `header`, `nav`, `main`, `section`, `article`, `footer`.
-- Filter buttons are real `<button>`s in a `role="group"` with an
-  `aria-label`, and announce their selected state through `aria-pressed`.
-- The search box has a `<label>` that is hidden visually (`.visually-hidden`)
-  but still read by screen readers.
-- The result count uses `aria-live="polite"`, so a screen reader announces the
-  new count after filtering without interrupting.
-- GitHub loading and error messages appear in a `role="status"` region, and the
-  Retry button is a focusable `<button>`.
-- Clear search returns focus to the search box.
+- Filter and level buttons are real `<button>`s in `role="group"` containers
+  with an `aria-label`, and announce their selected state through
+  `aria-pressed`.
+- Hide/Show buttons use `aria-expanded` and `aria-controls`, so a screen reader
+  knows what they open and whether it is open.
+- The search box and sort menu have `<label>`s that are hidden visually
+  (`.visually-hidden`) but still read by screen readers.
+- The login window is a native `<dialog>` opened with `showModal()`: focus
+  moves into it, stays inside while it is open, Escape closes it, and focus
+  returns to the Log in button afterwards. Its fields have labels, and errors
+  are tied to them with `aria-describedby` and `aria-invalid`.
+- The result count uses `aria-live="polite"`, and the GitHub and weather
+  messages appear in `role="status"` regions, so changes are announced without
+  interrupting.
+- Retry and Clear search are focusable buttons; Clear search returns focus to
+  the search box.
 - Reduced-motion support, described above.
-- Carried over from Assignment 1: labelled form fields with errors tied by
-  `aria-describedby`, `aria-invalid` on failing fields, a status line for the
-  form result, an active nav link marked by more than colour, visible focus,
-  and dark-theme colours adjusted for contrast.
+- Carried over from Assignment 1: labelled contact form fields with errors tied
+  by `aria-describedby`, an active nav link marked by more than colour, visible
+  focus, and dark-theme colours adjusted for contrast.
+
+Lighthouse Accessibility score: **100** (mobile and desktop).
 
 ## Performance
 
-- **No dependencies, no build step, no web fonts.** Three text files and one
-  SVG, plus one API request.
-- **One request to GitHub per page load.** `per_page=100` fetches every
-  repository in a single call, which is enough to filter out forks and still
-  have six left. The request starts as soon as the script runs and does not
-  block anything else on the page.
-- **Cheap animations.** Only `opacity` and `transform` are animated.
-- **Observers instead of scroll listeners.** Both the scroll spy and the scroll
-  reveal use `IntersectionObserver`, which the browser runs off the main
-  scrolling path; the reveal also stops observing each section after it has
-  appeared.
-- **Small DOM rebuilds.** Filtering rebuilds at most three cards with one
-  `replaceChildren` call.
-- **`defer`** on the script, and the theme set before first paint, as in
-  Assignment 1.
+**Lighthouse results** (Chrome, Incognito window so browser extensions cannot
+affect the result, page served locally with `python3 -m http.server`):
+
+| | Performance | Accessibility | Best Practices | SEO |
+|---|---|---|---|---|
+| Mobile | 100 | 100 | 100 | 100 |
+| Desktop | 100 | 100 | 100 | 100 |
+
+A first run in a normal Chrome window scored 41 for Performance, with 4 seconds
+of Total Blocking Time. The site's own script does very little on load, so the
+blocking time came from Chrome extensions injecting their own scripts into the
+page; the same code scored 99 in a clean headless run and 100 in Incognito.
+
+**What was done for Assignment 3**
+
+- **Lazy images with reserved space.** Project images are created with
+  `loading="lazy"` (off-screen images load only when scrolled near),
+  `decoding="async"`, and `width="600" height="340"`, so the browser reserves
+  their space before they arrive and nothing jumps (Cumulative Layout Shift: 0).
+  The CSS keeps `height: auto` next to `aspect-ratio: 16 / 9`; without it the
+  `height` attribute overrode the aspect ratio and stretched the images.
+- **Early connections.** `<link rel="preconnect">` for `api.github.com` and
+  `api.open-meteo.com` lets the browser open both connections while the page is
+  still loading.
+- **Fewer requests.** API answers are cached in `sessionStorage` (10 and 15
+  minutes), so reloading the page makes no new API calls.
+- **No repeated code.** The `storage` and `fetchJSON` helpers replaced repeated
+  `try`/`catch` blocks and two separate copies of the loading/error logic, and
+  three near-identical CSS button rules were merged into one.
+- **Unused code removed.** Every class in `styles.css` was checked against the
+  HTML and JavaScript, and every function and constant in `script.js` against
+  where it is used; none were unused. The empty `assets/images/.gitkeep` was
+  removed because the folder now holds a real file.
+- **Images.** The only image is a 273-byte SVG placeholder, so there was
+  nothing to compress or resize.
+
+**Carried over:** no dependencies, no build step and no web fonts; `defer` on
+the script; only `opacity` and `transform` animated; `IntersectionObserver`
+instead of scroll listeners; small DOM rebuilds with one `replaceChildren` call.
+
+**Lighthouse suggestions left on purpose**
+
+| Suggestion | Why it was left |
+|---|---|
+| Use efficient cache lifetimes / enable text compression | These are set by the web server, not the page. Python's test server does neither; GitHub Pages, where the site is published, sends compressed files with cache headers. |
+| Minify CSS and JavaScript (about 24 KiB) | Minifying removes the comments and formatting that make the code readable and explain how it works, which matters more for this project than 24 KiB. |
+| Render-blocking requests (40–270 ms) | The stylesheet has to load before the page can be drawn; that is expected for any styled page, and it did not lower the score. |
+| Avoid non-composited animations (2 elements) | Informational only; it does not affect the score. |
 
 ## Browser and device testing
 
 **Automated (Chromium, Playwright).** The page was served locally and driven by
-a script, with the GitHub API mocked so each state could be forced.
+scripts, with both APIs mocked so each state could be forced.
 
 | Check | Result |
 |---|---|
-| Initial load | 3 of 3 projects shown, count correct |
-| Software / Hardware filters | 2 and 1 projects respectively |
-| Search "KMP", "java", "verilog" | Matching projects only |
-| Search with no match ("python") | Empty-state message and Clear search shown; Clear restores 3 of 3 and focuses the search box |
-| Filter remembered | Hardware still selected after a reload |
-| GitHub success | Repo cards rendered, forks excluded |
-| GitHub offline | Connection error message with Retry |
-| Retry after recovery | Repositories load, error box cleared |
+| Sort: Newest / Oldest / Title A–Z | Digital Queue → TermFS → Classroom Reservation, the reverse, and alphabetical |
+| Filter + search + sort together | Software + "java" + Oldest gives Classroom Reservation, then TermFS ("Showing 2 of 3") |
+| Level buttons | Beginner, Medium and Hard each show one project and their own message; Any level shows all three with no message |
+| Hard + Software | Empty state: "No projects match this category and level yet." |
+| Category, level and sort remembered | Still selected after a reload; an invalid saved value falls back to the default |
+| Visit timer | Counts seconds; 3 seconds with the tab hidden were not counted; one hour shows as `1h 2m …` |
+| Login with empty fields | "Username is required." and "Password is required." |
+| Login, then name | Step 2 pre-filled with the username; empty name rejected; after Save: Log out button, greeting, contact Name filled |
+| Login after reload | Still logged in and greeted |
+| Escape during step 2 | Logged in, greeted by the username |
+| Log out | Greeting hidden, contact Name cleared, both keys removed |
+| Hide About and GitHub, reload | Both still hidden, buttons read Show with `aria-expanded="false"` |
+| Weather success | Temperature, conditions, feels-like, humidity, wind and time shown |
+| Cache | After a reload, each API had been called only once |
 | GitHub 403 | Rate-limit message with Retry |
-| Real GitHub API (no mock) | Repositories loaded |
-| Scroll reveal | Sections become visible as they scroll into view |
-| Card stagger | Delays of 0, 60 and 120 ms; hover lift still works afterwards |
-| Form success twice | Message animates on both submits |
-| Reduced motion | No section hidden, no animation runs, all features still work |
-| 320px phone width | No horizontal scrolling with the four-link nav, filters and search |
+| Weather offline | Connection message with Retry; Retry sends a new request |
+| Weather never answers | After 8 seconds: "The weather service took too long to answer" with Retry |
+| Project images | 16:9 at every width (327×184 desktop, 356×200 phone), `loading="lazy"` |
+| Merged button CSS | Computed styles of every pill button identical before and after |
+| Dark mode | Login dialog, greeting, level message and weather card all readable |
+| 320px, 360px, 390px, 480px and 768px widths | No horizontal scrolling; below 480px the five nav links wrap onto two centred lines, and jumping to a section still leaves its heading below the sticky header |
 | Console | No errors |
 
-**Manual.**
-
-Tested by hand in Chrome and Safari on macOS. At desktop, tablet and phone widths the layout, filters and search worked the same in both. With Wi-Fi off, the GitHub section showed the error message, and Retry loaded the repos once Wi-Fi was back. With Reduce motion turned on, nothing animated.
+**Manual.** Tested by hand in both Chrome and Safari on macOS: every feature above, at desktop
+and narrow window widths, with Lighthouse run on mobile and desktop.
 
 ## Known limitations
 
-- **GitHub rate limit.** Unauthenticated requests are limited to 60 per hour per
-  IP address. Reloading the page many times, or many visitors on one network,
-  can hit it; the site then shows the rate-limit message. Caching the response
-  (for example in `sessionStorage`) would reduce requests.
-- **Only six repositories** are shown, and only the first 100 returned by the
-  API are considered.
+- **The login is simulated.** Any username and password are accepted and
+  nothing is checked or sent; it demonstrates state, not security. A real login
+  would need a backend.
 - **The contact form cannot deliver a message.** A backend or hosted form
   service would be the next step.
+- **Both live sections depend on outside services.** If GitHub or Open-Meteo is
+  down, the visitor sees the error message and Retry, but no data. GitHub's
+  limit of 60 requests an hour per IP address is reduced, not removed, by the
+  10-minute cache.
+- **Saved choices belong to one browser.** Everything is in `localStorage`, so
+  it does not follow the visitor to another browser or device, and clearing site
+  data resets it.
+- **The visit timer is not saved**; it restarts on every page load by design.
+- **Only six repositories** are shown, and only the first 100 returned by the
+  API are considered.
 - **Project data lives in `script.js`.** Moving it to a separate JSON file would
   separate content from code, but would need a local server to load, since
   `fetch` of a local file is blocked over `file://`.
 - **The project cards share one placeholder image**, which stays light in dark
   mode because an external SVG cannot read the page's CSS variables.
-- **The navigation is a plain row** at every width, with no menu button. With
-  four links it still fits on a phone screen.
