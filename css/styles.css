@@ -829,8 +829,12 @@ h3 {
     scroll-padding-top: 155px;
   }
 
+  /* Five links no longer fit in one row on the narrowest phones (320px),
+     so they wrap onto a second, centred line instead of overflowing. */
   .nav-links {
-    gap: 1.25rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 1.25rem;
   }
 
   .project-grid,
